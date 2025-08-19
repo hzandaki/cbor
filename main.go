@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -52,8 +54,12 @@ func main() {
 		}
 	} else {
 		// is JSON, encode to CBOR
-		err := json.Unmarshal(inputValue, &value)
+		decoder := json.NewDecoder(bytes.NewReader(inputValue))
+		decoder.UseNumber()
+		err := decoder.Decode(&value)
 		if err == nil {
+			// Convert json.Number values to appropriate types
+			value = convertNumbers(value)
 			err = cbor.NewEncoder(os.Stdout).Encode(value)
 			if err != nil {
 				log.Print(err)
@@ -62,6 +68,36 @@ func main() {
 			fmt.Fprint(os.Stderr, "ERROR: invalid CBOR or JSON value.\n\n"+USAGE)
 			return
 		}
+	}
+}
+
+func convertNumbers(anything interface{}) interface{} {
+	switch v := anything.(type) {
+	case json.Number:
+		// Try to convert to int64 first
+		if i, err := strconv.ParseInt(string(v), 10, 64); err == nil {
+			return i
+		}
+		// If that fails, convert to float64
+		if f, err := strconv.ParseFloat(string(v), 64); err == nil {
+			return f
+		}
+		// If both fail, return the original string
+		return string(v)
+	case map[string]interface{}:
+		out := make(map[string]interface{}, len(v))
+		for k, val := range v {
+			out[k] = convertNumbers(val)
+		}
+		return out
+	case []interface{}:
+		out := make([]interface{}, len(v))
+		for i, val := range v {
+			out[i] = convertNumbers(val)
+		}
+		return out
+	default:
+		return anything
 	}
 }
 
