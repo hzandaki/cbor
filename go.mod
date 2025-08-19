@@ -1,4 +1,4 @@
-module github.com/fiatjaf/cbor
+module github.com/hzandaki/cbor
 
 go 1.14
 
